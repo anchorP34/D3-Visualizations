@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+
+path:hover {
+	fill-opacity: .7;
+}
+
+
+/* Style for Custom Tooltip */
+div.tooltip{   
+    position: absolute;           
+   text-align: center;           
+   width: 120px;                  
+   height: 40px;                 
+   padding: 2px;             
+   font: 10px sans-serif;        
+   background: white;   
+   border: 0px;      
+   border-radius: 8px;           
+   pointer-events: none;     
+}
+
+.state {
+  stroke: #333;
+  stroke-width: .5;
+}
+
+</style>
+<svg width="960" height="600"></svg>
+<script src="../lib/d3.v5.min.js"></script>
+<script src="../lib/d3-fetch.min.js"></script>
+<script src="../lib/d3-tip.min.js"></script>
+<script src="../lib/topojson.v2.min.js"></script>
+<script>
+
+var svg = d3.select("svg"),
+    width = +svg.attr("width"),
+    height = +svg.attr("height");
+    
+var earthquakes = d3.map();
+    
+// D3 Projection
+var projection = d3.geoAlbersUsa()
+				   .translate([width/2, height/2])    // translate to center of screen
+				   .scale([1000]);          // scale things down so see entire US
+        
+// Define path generator
+var path = d3.geoPath()               // path generator that will convert GeoJSON to SVG paths
+		  	 .projection(projection);  // tell path generator to use albersUsa projection
+
+
+var x = d3.scaleLinear()
+    .domain([1, 10])
+    .rangeRound([600, 860]);
+
+var color = d3.scaleThreshold()
+    .domain(d3.range(1, 10))
+    .range(d3.schemeBlues[9]);
+
+
+// Define the div for the tooltip
+var div = d3.select("body").append("div")	
+    .attr("class", "tooltip")				
+    .style("opacity", 0);
+
+var g = svg.append("g")
+    .attr("class", "key")
+    .attr("transform", "translate(0,40)");
+
+g.selectAll("rect")
+  .data(color.range().map(function(d) {
+      d = color.invertExtent(d);
+      if (d[0] == null) d[0] = x.domain()[0];
+      if (d[1] == null) d[1] = x.domain()[1];
+      return d;
+    }))
+  .enter().append("rect")
+    .attr("height", 8)
+    .attr("x", function(d) { return x(d[0]); })
+    .attr("width", function(d) { return x(d[1]) - x(d[0]); })
+    .attr("fill", function(d) { return color(d[0]); });
+
+g.append("text")
+    .attr("class", "caption")
+    .attr("x", x.range()[0])
+    .attr("y", -6)
+    .attr("fill", "#000")
+    .attr("text-anchor", "start")
+    .attr("font-weight", "bold")
+    .text("Earthquake Frequency");
+
+g.call(d3.axisBottom(x)
+    .tickSize(13)
+    .tickFormat(function(x, i) { return i ? x : x ; })
+    .tickValues(color.domain()))
+  .select(".domain")
+    .remove();
+
+var promises = [
+    d3.json("states-10m.json"),
+    d3.csv("state-earthquakes.csv", function(d) { earthquakes.set(d.States, {earthquakes: +d["Total Earthquakes"], region: d.Region}); })
+  ]
+
+
+  Promise.all(promises).then(ready)
+
+  function ready([us]) {
+
+    var earthquake_amounts = []
+    var map_data = topojson.feature(us, us.objects.states).features;
+    map_data.forEach(function(d){
+
+        //console.log(earthquakes["$" + d.properties.name])
+        d.earthquake_value = Object(earthquakes["$" + d.properties.name]).earthquakes
+        d.region = Object(earthquakes["$" + d.properties.name]).region
+        earthquake_amounts.push(d.earthquake_value)
+    });
+
+    color.domain(d3.range(0, Math.log(d3.max(earthquake_amounts))))
+
+    console.log(map_data)
+
+    //console.log(topojson.feature(us, us.objects.states).features)
+    //console.log("earthquakes",earthquakes.keys())
+    svg.append("g").selectAll(".state")
+    .data(map_data)
+    .enter().append("path")
+    .attr("class","state")
+    .attr("fill", function(d) { return color(Math.log(d.earthquake_value))})
+    .attr("d",path)
+  //Adding mouseevents
+  .on("mouseover", function(d) {
+
+    d3.select(this).transition().duration(0)
+    .style("opacity", 1)
+    .style("stroke", "red")
+    .style("stroke-width", 2);
+
+    div.transition().duration(300)
+    .style("opacity", 1)
+
+    div.text('State: ' + d.properties.name + ' Region: ' + d.region + ' Earthquakes: ' + d.earthquake_value)
+    .style("left", (d3.event.pageX) + "px")
+    .style("top", (d3.event.pageY -30) + "px");
+  })
+  .on("mouseout", function(d) {
+
+    d3.select(this).transition().duration(0)
+
+    .style("stroke", "#333")
+    .style("stroke-width", .5);
+
+
+  })
+
+
+
+
+  }
+  
+
+</script>

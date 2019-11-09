@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<style type="text/css">
+/* 13. Basic Styling with CSS */
+
+/* Style the lines by removing the fill and applying a stroke */
+.line {
+    fill: none;
+    stroke: steelblue;
+    stroke-width: 2px;
+  }
+
+/* Style the dots by assigning a fill and stroke */
+.dot {
+    fill: #ffab00;
+    stroke: #fff;
+}
+
+</style>
+<!-- Body tag is where we will append our SVG and SVG objects-->
+<body>
+</body>
+
+<title>Line Charts</title>
+
+<!-- Load in the d3 library -->
+<script src="../lib/d3.v5.min.js"></script>
+<script>
+
+var margin = {top: 40, right: 100, bottom: 150, left: 60},
+width = 1000 - margin.left - margin.right,
+height = 800 - margin.top - margin.bottom;
+
+// set the ranges
+// X will be time formatted, y will be a linear scale
+
+var earthquake_types = ["8.0+", "7_7.9", "6_6.9", "5_5.9"]
+var line_colors = {'5_5.9': '#FFC300', '6_6.9': '#FF5733', '7_7.9': '#C70039', '8.0+': '#900C3F'}
+var graph_titles = [
+    "Worldwide Earthquake stats 2000-2015"
+    ,"Worldwide Earthquake stats 2000-2015 with symbols"
+    ,"Worldwide Earthquake stats 2000-2015 square root scale"
+    ,"Worldwide Earthquake stats 2000-2015 log scale"
+]
+
+// Read in the the CSV and then read through each data point
+d3.dsv(",", "earthquakes.csv").then(function(data) 
+{
+    var dataList = {};
+
+    data.forEach(function(d) {
+        // Changes running total to an int and year from string to a date
+        var parser = d3.timeParse("%Y");
+        d.year = parser(d.year)
+        
+
+        earthquake_types.forEach(function(earthquake_type)
+        {
+            if (!(earthquake_type in dataList))
+                dataList[earthquake_type] = []
+
+            dataList[earthquake_type].push({year: d.year
+            , value: +d[earthquake_type]
+            , estimated_deaths: +d["Estimated Deaths"] 
+            })
+        }
+        );
+
+
+    });
+    
+    console.log(dataList)
+
+    // Get the min and max year for the X x.domain
+    min_year = d3.min(data, function(d) { return d.year; });
+    max_year = d3.max(data, function(d) { return d.year; });
+
+    // Printing 4 graphs
+    for (var i = 0; i < 4; i++)
+    {
+        
+        var x = d3.scaleTime().domain([min_year,max_year]).range([0, width]);  
+        
+        if (i <= 1) // The first two graphs will have the normal scale
+        {
+            var y = d3.scaleLinear().domain([0, d3.max(dataList["5_5.9"], function(d) { return d.value; })]).range([height, 0]);
+        }
+        else if  (i == 2) // This will be square root scaled
+        {
+            var y = d3.scaleSqrt().domain([0, d3.max(dataList["5_5.9"], function(d) { return Math.sqrt(d.value); })]).range([height, 0]);
+        }
+        else // This will be log scaled
+        {
+            var y = d3.scaleLog().domain([1, d3.max(dataList["5_5.9"], function(d) { return Math.log(d.value); })]).range([height, 0]);
+        }
+
+        var svg = d3.select("body")
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", 
+                "translate(" + margin.left + "," + margin.top + ")");
+
+        // 3. Call the x axis in a group tag
+        svg.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + height + ")")
+            .call(d3.axisBottom(x)); // Create an axis component with d3.axisBottom
+
+        // 4. Call the y axis in a group tag
+        svg.append("g")
+            .attr("class", "y axis")
+            .call(d3.axisLeft(y)); // Create an axis component with d3.axisLeft
+
+
+        // define the lines
+        var valueline = d3.line()
+            .x(function(d) { return x(d.year); })
+            .y(function(d) { 
+                    if (i <=1)
+                    {
+                        return y(d.value);
+                    } 
+                    else if (i ==2)
+                    {
+                        return y(Math.sqrt(d.value));
+                    }
+                    else 
+                    {
+                        if (d.value <= 1)
+                        {
+                            return y(1);
+                        }
+                        else
+                        { 
+                            return y(Math.log(d.value));
+                        }
+                    }  
+            });
+        
+        
+
+
+        earthquake_types.forEach(function(earthquake_type)
+        {
+
+            // Add the lines 
+            svg.append("path")
+                .data([dataList[earthquake_type]])
+                .attr("class", "line")
+                .attr("d", valueline)
+                .style("stroke", function(d){return line_colors[earthquake_type];})
+
+            // Add the circles to the line graph
+            svg.selectAll("dot")
+            .data(dataList[earthquake_type])
+            .enter().append("circle")
+            .attr("fill", function (d, i) {return line_colors[earthquake_type]; })
+            .attr("r", function(d) {return d.estimated_deaths ** .2})
+            .attr("cx", function(d) { return x(d.year); })
+            .attr("cy", function(d) { 
+                if (i <=1)
+                {
+                    return y(d.value);
+                } 
+                else if (i ==2)
+                {
+                    return y(Math.sqrt(d.value));
+                }
+                else 
+                {
+                    if (d.value <= 1)
+                    {
+                        console.log(d.value)
+                        return y(1);
+                    }
+                    else
+                    { 
+                        return y(Math.log(d.value));
+                    }
+                }  
+        });
+
+
+            // Text for title of graph
+            svg.append("text")
+                .attr("x", (width) / 2)             
+                .attr("y", -20)
+                .attr("text-anchor", "middle")  
+                .style("font-size", "20px")
+                .text(graph_titles[i]);
+
+            // Text for x axis
+            svg.append("text")
+                .attr("x", (width) / 2)             
+                .attr("y", height + 40)
+                .attr("text-anchor", "middle")  
+                .style("font-size", "16px")
+                .text("Year");
+        
+            // Text for y axis
+            svg.append("text")
+                .attr("x", -300)             
+                .attr("y", -45)
+                .attr("transform", "rotate(-90)")
+                .attr("text-anchor", "middle")  
+                .style("font-size", "16px")
+                
+                .text("Number of Earthquakes");
+
+            // Creation of a legend
+            var lineLegend = svg.selectAll(".lineLegend").data(earthquake_types)
+                .enter().append("g")
+                .attr("class","lineLegend")
+                .attr("transform", function (d,i) {
+                        return "translate(" + (width + 50) + "," + (i*30)+")";
+                    });
+            
+            // Place the text of each variable in the legend
+            lineLegend.append("text").text(function (d) {return d;})
+                .attr("transform", "translate(15,9)"); //align texts with boxes
+            
+            // Give the legend colors
+            lineLegend.append("rect")
+                .attr("fill", function (d, i) {return line_colors[d]; })
+                .attr("width", 10).attr("height", 10);
+
+        });
+
+
+    };
+
+});
+
+
+
+</script>

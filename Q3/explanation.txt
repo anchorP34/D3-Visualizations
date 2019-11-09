@@ -1,0 +1,1 @@
+The situations you should use a square root or logged scale should be when the different partitions of data have different magnitudes of data by an extreme amount. It makes the graphs more easily spaced out, and you can have a better comparison of data patterns.
